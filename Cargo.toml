@@ -1,0 +1,15 @@
+[package]
+name = "fhe"
+version = "0.1.0"
+edition = "2021"
+authors = ["0xvon"]
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/0xvon/bfv"
+categories = ["cryptography"]
+keywords = ["cryptography", "FHE"]
+description = "Rust Impl of FHE schemes"
+
+[dependencies]
+probability = "0.20.3"
+rand = "0.8.5"
