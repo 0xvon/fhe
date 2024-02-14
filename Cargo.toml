@@ -13,3 +13,4 @@ description = "Rust Impl of FHE schemes"
 [dependencies]
 probability = "0.20.3"
 rand = "0.8.5"
+rand_distr = "0.4.3"
