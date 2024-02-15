@@ -5,3 +5,4 @@ mod keygen;
 mod plaintext;
 mod poly;
 mod random;
+mod tests;

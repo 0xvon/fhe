@@ -49,7 +49,7 @@ impl Plaintext {
     // C2 = [pk_2 * u + e_2]_q
     pub fn encrypt<T: RngCore + CryptoRng>(
         &self,
-        pk: PublicKey,
+        pk: &PublicKey,
         std_dev: f64,
         rng: &mut T,
     ) -> Ciphertext {

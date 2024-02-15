@@ -6,6 +6,7 @@ Currently supporting BFV, CKKS.
 #### Env
 
 This impl is based on these primitives:
+
 - poly: ...
 - crypto: ...
 
@@ -16,9 +17,14 @@ This impl is based on these primitives:
 #### Run
 
 ```bash
-cargo build
-cargo test
+cargo test test_encryption -- --nocapture
 ```
+
+#### TODO
+
+- multi-methods
+- security analytics (under CCA and CPA)
+- benchmark
 
 #### References
 
