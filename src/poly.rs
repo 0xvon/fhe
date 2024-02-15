@@ -52,7 +52,7 @@ impl Neg for Poly {
 impl Mul<i64> for Poly {
     type Output = Poly;
     fn mul(self, other: i64) -> Self::Output {
-        let out_val = self.0.into_iter().map(|i| i * other).collect();
+        let out_val = self.0.into_iter().map(|self_i| self_i * other).collect();
         Poly(out_val)
     }
 }
@@ -64,7 +64,7 @@ impl Mul<f64> for Poly {
         let out_val = self
             .0
             .into_iter()
-            .map(|i| (i as f64 * other).round() as i64)
+            .map(|self_i| (self_i as f64 * other).round() as i64)
             .collect();
         Poly(out_val)
     }
@@ -216,7 +216,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add() {
+    fn test_poly_add() {
         let a = a_poly();
         let b = b_poly();
         let sum = a + b;
@@ -225,5 +225,57 @@ mod tests {
         let c = Poly(vec![3, -1, 6, -3]);
         let sum_uneven = c + sum;
         assert_eq!(sum_uneven.0, vec![-5, -2, 6, 1, -1, 5, -2, 6, 8, -6]);
+    }
+
+    #[test]
+    fn test_poly_mul() {
+        let a = Poly(vec![4, 5, 2]);
+        let b = Poly(vec![7, 9, 1]);
+        let mul = a * b;
+        assert_eq!(mul.0, vec![28, 71, 63, 23, 2]);
+    }
+
+    #[test]
+    fn test_poly_modulo() {
+        let a = a_poly();
+        let b = b_poly();
+        let mul = a * b;
+        assert_eq!(
+            mul.0,
+            vec![7, 7, 0, -10, -2, 2, -7, -10, -4, 4, 6, 14, -9, -12, 16, 2, -19, -4, 5]
+        );
+        let mod_degree_2 = mul.clone() % (16, 2);
+        assert_eq!(mod_degree_2.0, vec![1, 1]);
+        let mod_degree_4 = mul.clone() % (16, 4);
+        assert_eq!(mod_degree_4.0, vec![11, 1, 2, 12]);
+        let mod_degree_8 = mul.clone() % (16, 8);
+        assert_eq!(mod_degree_8.0, vec![8, 15, 15, 8, 7, 14, 9, 4]);
+        let mod_degree_16 = mul.clone() % (16, 16);
+        assert_eq!(
+            mod_degree_16.0,
+            vec![10, 11, 11, 6, 14, 2, 9, 6, 12, 4, 6, 14, 7, 4, 0, 2]
+        );
+    }
+
+    #[test]
+    fn test_poly_coeff_modulo() {
+        let a = a_poly();
+        let modulo = a % (4, 10);
+        assert_eq!(modulo.0, vec![1, 0, 0, 3, 3, 2, 1, 1, 1, 3]);
+    }
+
+    #[test]
+    fn test_poly_decomposition() {
+        let a = a_poly();
+        let dec = a.clone().decompose(4, 2);
+
+        assert_eq!(dec[0].0, vec![-1, 0, 0, 1, -1, 0, -1, 1, 1, -1]);
+        assert_eq!(dec[1].0, vec![-1, 0, 0, 1, 0, 1, -1, 0, 0, 0]);
+        assert_eq!(dec[2].0, vec![-1, 0, 0, 0, 0, 1, 0, 1, 0, -1]);
+        assert_eq!(dec[3].0, vec![0, 0, 0, 0, 0, 0, 0, 0, 1, 0]);
+
+        let recomposed =
+            dec[0].clone() + dec[1].clone() * 2 + dec[2].clone() * 4 + dec[3].clone() * 8;
+        assert_eq!(recomposed, a);
     }
 }
