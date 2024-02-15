@@ -2,3 +2,4 @@
 
 mod poly;
 mod random;
+mod keygen;

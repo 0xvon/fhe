@@ -96,6 +96,7 @@ impl Mul<Poly> for Poly {
 impl Rem<(i64, usize)> for Poly {
     type Output = Poly;
     fn rem(self, modulus: (i64, usize)) -> Self::Output {
+        // take mod (X^N + 1) for poly, then mod t for each coefficient
         // t
         let coeff_mod = modulus.0;
         // N
