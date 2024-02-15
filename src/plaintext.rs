@@ -7,7 +7,7 @@ use rand::{CryptoRng, RngCore};
 
 #[derive(Debug, PartialEq)]
 pub struct Plaintext {
-    M: Poly,
+    m: Poly,
     t: i64,
 }
 
@@ -23,7 +23,7 @@ impl Plaintext {
 
     pub(crate) fn new_from_poly(poly: Poly, t: i64) -> Plaintext {
         assert!(t > 1);
-        Plaintext { M: poly, t }
+        Plaintext { m: poly, t }
     }
 
     pub fn generate_random_plaintext<T: RngCore + CryptoRng>(
@@ -33,13 +33,13 @@ impl Plaintext {
     ) -> Plaintext {
         assert!(t > 1);
         Plaintext {
-            M: random::get_uniform(t, degree, rng),
+            m: random::get_uniform(t, degree, rng),
             t,
         }
     }
 
-    pub fn M(&self) -> Poly {
-        self.M.clone()
+    pub fn m(&self) -> Poly {
+        self.m.clone()
     }
 
     // u <- R_2
@@ -54,8 +54,8 @@ impl Plaintext {
         rng: &mut T,
     ) -> Ciphertext {
         let q = pk.q;
-        let degree = self.M.degree();
-        let M = self.M.clone();
+        let degree = self.m.degree();
+        let m = self.m.clone();
         // Δ = q/t
         let delta = (q as f64 / self.t as f64).floor() as i64;
 
@@ -64,7 +64,7 @@ impl Plaintext {
         let e_1 = random::get_gaussian(std_dev, degree, rng);
         let e_2 = random::get_gaussian(std_dev, degree, rng);
 
-        let c_1 = (pk.pk_1.clone() * u.clone() + e_1 + M * delta) % (q, degree);
+        let c_1 = (pk.pk_1.clone() * u.clone() + e_1 + m * delta) % (q, degree);
         let c_2 = (pk.pk_2.clone() * u + e_2) % (q, degree);
 
         Ciphertext {

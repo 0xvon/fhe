@@ -23,12 +23,12 @@ impl Ciphertext {
         let c_2 = self.c_2.clone();
 
         // t/q
-        let delta_inv = (t as f64 / q as f64) as f64;
+        let delta_inv = t as f64 / q as f64;
 
         // ((c_1 + c_2*sk) % q * t/q) % t
-        let _m = ((c_1 + c_2 * sk.clone()) % (q, degree)) * delta_inv;
-        let M = _m % (t, degree);
-        Plaintext::new_from_poly(M, t)
+        let m_raw = (c_1 + c_2 * sk.clone()) % (q, degree);
+        let poly = (m_raw * delta_inv) % (t, degree);
+        Plaintext::new_from_poly(poly, t)
     }
 
     pub fn basic_mul(&self, other: Ciphertext) -> (Poly, Poly, Poly) {
@@ -55,7 +55,7 @@ impl Ciphertext {
     }
 
     // TODO: impl relinealize
-    pub fn relinearizeV1(
+    pub fn relinearize_v1(
         &self,
         c_1: Poly,
         c_2: Poly,
@@ -79,7 +79,7 @@ impl Ciphertext {
             t: self.t,
         }
     }
-    pub fn relinearizeV2(
+    pub fn relinearize_v2(
         &self,
         c_1: Poly,
         c_2: Poly,
@@ -143,7 +143,7 @@ impl Mul<(Ciphertext, &RelinearizationKeyV1)> for Ciphertext {
     fn mul(self, rhs: (Ciphertext, &RelinearizationKeyV1)) -> Self::Output {
         let (rhs_ct, rlk) = rhs;
         let (c_1, c_2, c_3) = self.basic_mul(rhs_ct);
-        self.relinearizeV1(c_1, c_2, c_3, rlk)
+        self.relinearize_v1(c_1, c_2, c_3, rlk)
     }
 }
 
@@ -152,6 +152,6 @@ impl Mul<(Ciphertext, &RelinearizationKeyV2)> for Ciphertext {
     fn mul(self, rhs: (Ciphertext, &RelinearizationKeyV2)) -> Self::Output {
         let (rhs_ct, rlk) = rhs;
         let (c_1, c_2, c_3) = self.basic_mul(rhs_ct);
-        self.relinearizeV2(c_1, c_2, c_3, rlk)
+        self.relinearize_v2(c_1, c_2, c_3, rlk)
     }
 }
