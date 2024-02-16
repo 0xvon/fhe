@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::keygen::{PublicKey, RelinearizationKeyV1, RelinearizationKeyV2, SecretKey};
+    use crate::keygen::{EvaluationKeyV1, EvaluationKeyV2, PublicKey, SecretKey};
     use crate::plaintext::Plaintext;
     use rand::{CryptoRng, RngCore, SeedableRng};
 
@@ -8,19 +8,14 @@ mod tests {
         degree: usize,
         q: i64,
         std_dev: f64,
-        base: i64,
+        p: i64,
         rng: &mut T,
-    ) -> (
-        SecretKey,
-        PublicKey,
-        RelinearizationKeyV1,
-        RelinearizationKeyV2,
-    ) {
-        let sk = SecretKey::generate_sk(degree, rng);
+    ) -> (SecretKey, PublicKey, EvaluationKeyV1, EvaluationKeyV2) {
+        let sk = SecretKey::new(degree, rng);
         let pk = sk.generate_pk(q, std_dev, rng);
-        let rlk_1 = sk.generate_relin_key_v1(q, std_dev, rng, base);
-        let rlk_2 = sk.generate_relin_key_v2(q, std_dev, rng, base);
-        (sk, pk, rlk_1, rlk_2)
+        let ek_2 = sk.generate_ek_v1(q, std_dev, rng, p);
+        let rlk_2 = sk.generate_ek_v2(q, std_dev, rng, p);
+        (sk, pk, ek_2, rlk_2)
     }
 
     #[test]
@@ -29,14 +24,14 @@ mod tests {
         let degree = 1000;
         let t_list = vec![2, 4, 8, 16, 32, 64];
         let q = 65536;
-        let rlk_base = (q as f64).log2() as i64;
+        let rlk_p = (q as f64).log2() as i64;
         let std_dev = 3.2;
         let mut rng = rand::rngs::StdRng::seed_from_u64(18);
 
         for t in t_list.iter() {
             for i in 0..iter_amount {
                 println!("--- #{} encryption test for t={} ---", i, t);
-                let (sk, pk, _, _) = get_test_keys(degree, q, std_dev, rlk_base, &mut rng);
+                let (sk, pk, _, _) = get_test_keys(degree, q, std_dev, rlk_p, &mut rng);
                 let plaintext = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
                 println!("plaintext: {}", plaintext.m());
                 let encrypted = plaintext.encrypt(&pk, std_dev, &mut rng);
@@ -56,14 +51,14 @@ mod tests {
         let degree = 1000;
         let t_list = vec![2, 4, 8, 16, 32];
         let q = 65536;
-        let rlk_base = (q as f64).log2() as i64;
+        let rlk_p = (q as f64).log2() as i64;
         let std_dev = 3.2;
         let mut rng = rand::rngs::StdRng::seed_from_u64(18);
 
         for t in t_list.iter() {
             for i in 0..iter_amount {
                 println!("--- #{} encryption test for t={} ---", i, t);
-                let (sk, pk, _, _) = get_test_keys(degree, q, std_dev, rlk_base, &mut rng);
+                let (sk, pk, _, _) = get_test_keys(degree, q, std_dev, rlk_p, &mut rng);
                 let plaintext_l = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
                 let plaintext_r = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
 
@@ -85,14 +80,14 @@ mod tests {
         let degree = 1000;
         let t_list = vec![2, 4, 8, 16, 32];
         let q = 65536;
-        let rlk_base = (q as f64).log2() as i64;
+        let rlk_p = (q as f64).log2() as i64;
         let std_dev = 3.2;
         let mut rng = rand::rngs::StdRng::seed_from_u64(18);
 
         for t in t_list.iter() {
             for i in 0..iter_amount {
                 println!("--- #{} encryption test for t={} ---", i, t);
-                let (sk, pk, _, _) = get_test_keys(degree, q, std_dev, rlk_base, &mut rng);
+                let (sk, pk, _, _) = get_test_keys(degree, q, std_dev, rlk_p, &mut rng);
                 let plaintext_l = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
                 let plaintext_r = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
 
@@ -114,14 +109,14 @@ mod tests {
         let degree = 8;
         let t_list = vec![4, 8, 16];
         let q = 65536;
-        let rlk_base = (q as f64).log2() as i64;
+        let rlk_p = (q as f64).log2() as i64;
         let std_dev = 2.9;
         let mut rng = rand::rngs::StdRng::seed_from_u64(18);
 
         for t in t_list.iter() {
             for i in 0..iter_amount {
                 println!("--- #{} encryption test for t={} ---", i, t);
-                let (sk, pk, rlk_1, rlk_2) = get_test_keys(degree, q, std_dev, rlk_base, &mut rng);
+                let (sk, pk, ek_2, rlk_2) = get_test_keys(degree, q, std_dev, rlk_p, &mut rng);
                 let plaintext_l = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
                 let plaintext_r = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
 
@@ -129,7 +124,7 @@ mod tests {
                 let encrypted_r = plaintext_r.encrypt(&pk, std_dev, &mut rng);
 
                 let decrypted_v1 =
-                    (encrypted_l.clone() * (encrypted_r.clone(), &rlk_1)).decrypt(&sk);
+                    (encrypted_l.clone() * (encrypted_r.clone(), &ek_2)).decrypt(&sk);
                 let decrypted_v2 =
                     (encrypted_l.clone() * (encrypted_r.clone(), &rlk_2)).decrypt(&sk);
 

@@ -98,28 +98,28 @@ impl Rem<(i64, usize)> for Poly {
     fn rem(self, modulus: (i64, usize)) -> Self::Output {
         // take mod (X^N + 1) for poly, then mod t for each coefficient
         // t
-        let coeff_mod = modulus.0;
+        let t = modulus.0;
         // N
-        let degree = modulus.1;
-        let mut out_val = vec![0; degree];
+        let n = modulus.1;
+        let mut out_val = vec![0; n];
 
         // X^i = X^{i+j*2N} mod (X^N+1) for all j
         for (i, coeff) in self.0.iter().enumerate() {
-            let reduced_i = i % (2 * degree);
+            let reduced_i = i % (2 * n);
 
-            // TODO: ">"???
-            if reduced_i >= degree {
-                // if N % 2N > N, coeff should ge negated and added to the N % 2N
-                out_val[reduced_i % degree] -= coeff;
+            // if n % 2n >= n
+            if reduced_i >= n {
+                // coeff should ge negated and added to the N % 2N
+                out_val[reduced_i % n] -= coeff;
             } else {
-                // if N % 2N ≤ N, coeff should ge added to the N % 2N
+                // coeff should ge added to the N % 2N
                 out_val[reduced_i] += coeff;
             }
         }
 
         // coeff % t
         for coeff in out_val.iter_mut() {
-            *coeff = Poly::mod_coeff(*coeff, coeff_mod)
+            *coeff = Poly::mod_coeff(*coeff, t)
         }
         Poly(out_val)
     }
@@ -157,7 +157,12 @@ impl Poly {
         self.0.clone()
     }
 
-    // reduce a coefficient into the [0,q) bounds
+    pub fn norm(&self) -> i64 {
+        self.0.iter().sum()
+    }
+
+    // modulo operation for coefficient(constant)
+    // add by q to change negative value to positive
     fn mod_coeff(coeff: i64, q: i64) -> i64 {
         (coeff % q + q) % q
     }
@@ -166,7 +171,7 @@ impl Poly {
     // $poly = sum_{i=0}^l poly^i T^i$
     // with
     // $poly^i ∈ R_T$
-    pub fn decompose(self, l: usize, base: i64) -> Vec<Poly> {
+    pub fn decompose(self, l: usize, t: i64) -> Vec<Poly> {
         let mut mut_poly = self.clone();
 
         // for all 0≤i<l, starting from l to 0
@@ -174,15 +179,19 @@ impl Poly {
             .rev()
             .map(|i| {
                 // T^i: multiplier for that level i
-                let base_i = base.pow(i as u32);
+                let t_i = t.pow(i as u32);
 
+                // polyのj項ごとに計算
                 let dec_val_i = mut_poly
                     .0
                     .iter_mut()
                     .map(|val_j| {
                         // calculate how many times T^i divides the coefficient
                         // to get decomposition
-                        let fl_div = *val_j as f64 / base_i as f64;
+                        // a_j/T^i
+                        let fl_div = *val_j as f64 / t_i as f64;
+
+                        // if a_j/T^i > 0.0 then
                         let int_div = if fl_div > 0.0 {
                             fl_div.floor()
                         } else {
@@ -190,7 +199,7 @@ impl Poly {
                         } as i64;
 
                         // subtract T^i * the decomposed value
-                        *val_j = *val_j - base_i * int_div;
+                        *val_j = *val_j - t_i * int_div;
 
                         // return decomposed value for level i
                         int_div
@@ -233,6 +242,22 @@ mod tests {
         let b = Poly(vec![7, 9, 1]);
         let mul = a * b;
         assert_eq!(mul.0, vec![28, 71, 63, 23, 2]);
+    }
+
+    #[test]
+    fn test_poly_modulo_x() {
+        // a(x) = x^2+1 , b(x) = 2x^2 - 1
+        let a = Poly(vec![1, 0, 1]);
+        let b = Poly(vec![-1, 0, 2]);
+        // a(x) * b(x) = 2x^4 + x^2 - 1
+        let ab = a * b;
+        assert_eq!(ab.0, vec![-1, 0, 1, 0, 2]);
+
+        let ab_1 = ab + Poly(vec![1]); // plus by reminder
+
+        // f(x) = g(x)(2x^2 - 1) + 1
+        let mod_ab_1 = ab_1.clone() % (2, 2);
+        assert_eq!(mod_ab_1.0, [1, 0]);
     }
 
     #[test]
