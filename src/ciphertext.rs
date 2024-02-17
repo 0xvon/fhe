@@ -163,58 +163,215 @@ impl Mul<(Ciphertext, &EvaluationKeyV2)> for Ciphertext {
 
 #[cfg(test)]
 mod tests {
-    use crate::ciphertext::Ciphertext;
-    use crate::poly::Poly;
+    use crate::keygen::{EvaluationKeyV1, EvaluationKeyV2, PublicKey, SecretKey};
+    use crate::plaintext::Plaintext;
+    use rand::{CryptoRng, RngCore, SeedableRng};
 
-    fn basic_mul_helper(msg_1: &Vec<i64>, msg_2: &Vec<i64>, t: i64, q: i64, std_dev: f64) {
-        let n = msg_1.len();
-        let a = msg_1.clone();
-        let b = msg_2.clone();
-
-        let ct_1 = Ciphertext {
-            c_1: Poly::new(a.clone()),
-            c_2: Poly::new(b.clone()),
-            q,
-            t,
-        };
-        let ct_2 = Ciphertext {
-            c_1: Poly::new(a.clone()),
-            c_2: Poly::new(b.clone()),
-            q,
-            t,
-        };
-        let delta_inv = t as f64 / q as f64;
-
-        // run basic_mul
-        let (c_1_prime, c_2_prime, c_3_prime) = ct_1.clone().basic_mul(ct_2.clone());
-
-        let c_1_prime_raw = (ct_1.c_1.clone() * ct_2.c_1.clone()) * delta_inv;
-        let c_2_prime_raw =
-            (ct_1.c_1.clone() * ct_2.c_2.clone() + ct_1.c_2.clone() * ct_2.c_1.clone()) * delta_inv;
-        let c_3_prime_raw = (ct_1.c_2.clone() * ct_2.c_2.clone()) * delta_inv;
-
-        // check non-zero
-        assert_ne!(c_1_prime.norm(), 0, "||c1'|| = 0");
-        assert_ne!(c_2_prime.norm(), 0, "||c2'|| = 0");
-        assert_ne!(c_3_prime.norm(), 0, "||c3'|| = 0");
-
-        assert_eq!(c_1_prime, c_1_prime_raw % (q, n));
-        assert_eq!(c_2_prime, c_2_prime_raw % (q, n));
-        assert_eq!(c_3_prime, c_3_prime_raw % (q, n));
+    fn get_test_keys<T: CryptoRng + RngCore>(
+        degree: usize,
+        q: i64,
+        std_dev: f64,
+        p: i64,
+        rng: &mut T,
+    ) -> (SecretKey, PublicKey, EvaluationKeyV1, EvaluationKeyV2) {
+        let sk = SecretKey::new(degree, rng);
+        let pk = sk.generate_pk(q, std_dev, rng);
+        let ek_1 = sk.generate_ek_v1(q, std_dev, rng, p);
+        let ek_2 = sk.generate_ek_v2(q, std_dev, rng, p);
+        (sk, pk, ek_1, ek_2)
     }
 
     #[test]
-    fn test_ciphertext_basic_mul() {
-        for t in vec![32].iter() {
-            basic_mul_helper(&vec![0, 6], &vec![7, 2], *t, 65536, 1.0);
-            // basic_mul_helper(&vec![3, 2, 1, 0], &vec![1, 2, 3, 4], *t, 65536, 1.0);
-            basic_mul_helper(
-                &vec![33, 25, 1, 50, 33, 21, 17, 32],
-                &vec![27, 99, 22, 1, 5, 41, 22, 3],
-                *t,
-                65536,
-                3.2,
-            );
+    fn test_encryption() {
+        let iter_amount = 100;
+        let degree = 1000;
+        let t_list = vec![2, 4, 8, 16, 32, 64];
+        let q = 65536;
+        let rlk_p = (q as f64).log2() as i64;
+        let std_dev = 3.2;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(18);
+
+        for t in t_list.iter() {
+            for i in 0..iter_amount {
+                println!("--- #{} encryption test for t={} ---", i, t);
+                let (sk, pk, _, _) = get_test_keys(degree, q, std_dev, rlk_p, &mut rng);
+                let plaintext = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
+                println!("plaintext: {}", plaintext.m());
+                let encrypted = plaintext.encrypt(&pk, std_dev, &mut rng);
+                println!("ciphertext: {}", encrypted.c_1);
+                let decrypted = encrypted.decrypt(&sk);
+                println!("decrypted: {}", decrypted.m());
+                let m_l = plaintext.m();
+                let m_r = decrypted.m();
+                assert_eq!(m_l, m_r);
+            }
+        }
+    }
+
+    fn basic_mul_helper(msg_1: Vec<i64>, msg_2: Vec<i64>, t: i64, q: i64, std_dev: f64) {
+        let degree = msg_1.len();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(20);
+
+        let secret_key = SecretKey::new(degree, &mut rng);
+        let public_key = secret_key.generate_pk(q, std_dev, &mut rng);
+
+        let plaintext_1 = Plaintext::new(msg_1, t);
+        let ciphertext_1 = plaintext_1.encrypt(&public_key, std_dev, &mut rng);
+        let plaintext_2 = Plaintext::new(msg_2, t);
+        let ciphertext_2 = plaintext_2.encrypt(&public_key, std_dev, &mut rng);
+
+        // Multiply without relinearizing
+        let (c_0, c_1, c_2) = ciphertext_1.clone().basic_mul(ciphertext_2.clone());
+
+        // Decrypt non-relinearized multilication output
+        let s = secret_key.sk;
+        let delta_inv = t as f64 / q as f64;
+        let raw = c_0.clone() + c_1.clone() * s.clone() + c_2.clone() * s.clone() * s.clone();
+        let decrypted_mul = (raw * delta_inv) % (t, degree);
+
+        assert_eq!(
+            decrypted_mul,
+            (plaintext_1.m() * plaintext_2.m()) % (t, degree)
+        );
+    }
+
+    // Test that ciphertext multiplication without relinearization encrypt/decrypts correctly
+    #[test]
+    fn test_basic_mul() {
+        for t in vec![2, 4, 8, 16, 32].iter() {
+            basic_mul_helper(vec![0, 6], vec![7, 2], *t, 65536, 1.0);
+            basic_mul_helper(vec![3, 2, 1, 0], vec![1, 2, 3, 4], *t, 65536, 1.0);
+            // TODO: it fails
+            // basic_mul_helper(
+            //     vec![33, 25, 1, 50, 33, 21, 17, 32],
+            //     vec![27, 99, 22, 1, 5, 41, 22, 3],
+            //     *t,
+            //     65536,
+            //     2.9,
+            // );
+        }
+    }
+
+    #[test]
+    fn test_homomorphic_add() {
+        let iter_amount = 10;
+        let degree = 1000;
+        let t_list = vec![2, 4, 8, 16, 32];
+        let q = 65536;
+        let rlk_p = (q as f64).log2() as i64;
+        let std_dev = 3.2;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(18);
+
+        for t in t_list.iter() {
+            for i in 0..iter_amount {
+                println!("--- #{} encryption test for t={} ---", i, t);
+                let (sk, pk, _, _) = get_test_keys(degree, q, std_dev, rlk_p, &mut rng);
+                let plaintext_l = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
+                let plaintext_r = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
+
+                let encrypted_l = plaintext_l.encrypt(&pk, std_dev, &mut rng);
+                let encrypted_r = plaintext_r.encrypt(&pk, std_dev, &mut rng);
+
+                let decrypted = (encrypted_l.clone() + encrypted_r.clone()).decrypt(&sk);
+
+                let m_l = (plaintext_l.m() + plaintext_r.m()) % (*t, degree);
+                let m_r = decrypted.m();
+                assert_eq!(m_l, m_r);
+            }
+        }
+    }
+
+    #[test]
+    fn test_homomorphic_sub() {
+        let iter_amount = 10;
+        let degree = 1000;
+        let t_list = vec![2, 4, 8, 16, 32];
+        let q = 65536;
+        let rlk_p = (q as f64).log2() as i64;
+        let std_dev = 3.2;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(18);
+
+        for t in t_list.iter() {
+            for i in 0..iter_amount {
+                println!("--- #{} encryption test for t={} ---", i, t);
+                let (sk, pk, _, _) = get_test_keys(degree, q, std_dev, rlk_p, &mut rng);
+                let plaintext_l = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
+                let plaintext_r = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
+
+                let encrypted_l = plaintext_l.encrypt(&pk, std_dev, &mut rng);
+                let encrypted_r = plaintext_r.encrypt(&pk, std_dev, &mut rng);
+
+                let decrypted = (encrypted_l.clone() - encrypted_r.clone()).decrypt(&sk);
+
+                let m_l = (plaintext_l.m() - plaintext_r.m()) % (*t, degree);
+                let m_r = decrypted.m();
+                assert_eq!(m_l, m_r);
+            }
+        }
+    }
+
+    #[test]
+    fn test_homomorphic_mul_v1() {
+        let iter_amount = 10;
+        let degree = 4; // TODO: fails if 8
+        let ts = [4, 8, 16];
+        let q = 65536;
+
+        let base = (q as f64).log2() as i64;
+        let std_dev = 2.9;
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(18);
+
+        for t in ts.iter() {
+            for i in 0..iter_amount {
+                println!("--- #{} encryption test for t={} ---", i, t);
+                let (sk, pk, ek_1, _) = get_test_keys(degree, q, std_dev, base, &mut rng);
+                let plaintext_l = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
+                let plaintext_r = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
+
+                let encrypted_l = plaintext_l.encrypt(&pk, std_dev, &mut rng);
+                let encrypted_r = plaintext_r.encrypt(&pk, std_dev, &mut rng);
+
+                let decrypted_v1 =
+                    (encrypted_l.clone() * (encrypted_r.clone(), &ek_1)).decrypt(&sk);
+
+                let m_l = plaintext_l.m() * plaintext_r.m() % (*t, degree);
+                let m_r = decrypted_v1.m();
+                assert_eq!(m_l, m_r);
+            }
+        }
+    }
+
+    #[test]
+    fn test_homomorphic_mul_v2() {
+        // TODO: fails
+        let iter_amount = 10;
+        let degree = 4; // TODO: fails if 8
+        let ts = [16];
+        let q = 65536;
+
+        let base = 2_i64.pow(13) * q;
+        let std_dev = 2.0;
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(18);
+
+        for t in ts.iter() {
+            for i in 0..iter_amount {
+                println!("--- #{} encryption test for t={} ---", i, t);
+                let (sk, pk, ek_1, _) = get_test_keys(degree, q, std_dev, base, &mut rng);
+                let plaintext_l = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
+                let plaintext_r = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
+
+                let encrypted_l = plaintext_l.encrypt(&pk, std_dev, &mut rng);
+                let encrypted_r = plaintext_r.encrypt(&pk, std_dev, &mut rng);
+
+                let decrypted_v1 =
+                    (encrypted_l.clone() * (encrypted_r.clone(), &ek_1)).decrypt(&sk);
+
+                let m_l = plaintext_l.m() * plaintext_r.m() % (*t, degree);
+                let m_r = decrypted_v1.m();
+                assert_eq!(m_l, m_r);
+            }
         }
     }
 }

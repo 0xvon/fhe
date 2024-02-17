@@ -105,6 +105,7 @@ impl SecretKey {
         let e = random::get_gaussian(std_dev, degree, rng);
         // [-(a*sk + e) + p * sk^2]_{pq}
         let ek_1 = (-(a.clone() * sk.clone() + e) + sk.clone() * sk.clone() * p) % (p * q, degree);
+
         EvaluationKeyV2 { ek_1, ek_2: a, p }
     }
 }
