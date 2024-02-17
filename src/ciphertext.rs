@@ -164,7 +164,7 @@ impl Mul<(Ciphertext, &EvaluationKeyV2)> for Ciphertext {
 #[cfg(test)]
 mod tests {
     use crate::keygen::{EvaluationKeyV1, EvaluationKeyV2, PublicKey, SecretKey};
-    use crate::plaintext::Plaintext;
+    use crate::plaintext::{self, Plaintext};
     use rand::{CryptoRng, RngCore, SeedableRng};
 
     fn get_test_keys<T: CryptoRng + RngCore>(
@@ -344,7 +344,6 @@ mod tests {
 
     #[test]
     fn test_homomorphic_mul_v2() {
-        // TODO: fails
         let iter_amount = 10;
         let degree = 4; // TODO: fails if 8
         let ts = [16];
@@ -358,19 +357,18 @@ mod tests {
         for t in ts.iter() {
             for i in 0..iter_amount {
                 println!("--- #{} encryption test for t={} ---", i, t);
-                let (sk, pk, ek_1, _) = get_test_keys(degree, q, std_dev, base, &mut rng);
+                let (sk, pk, _, ek_2) = get_test_keys(degree, q, std_dev, base, &mut rng);
                 let plaintext_l = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
                 let plaintext_r = Plaintext::generate_random_plaintext(degree, *t, &mut rng);
 
                 let encrypted_l = plaintext_l.encrypt(&pk, std_dev, &mut rng);
                 let encrypted_r = plaintext_r.encrypt(&pk, std_dev, &mut rng);
 
-                let decrypted_v1 =
-                    (encrypted_l.clone() * (encrypted_r.clone(), &ek_1)).decrypt(&sk);
+                let decrypted = (encrypted_l.clone() * (encrypted_r.clone(), &ek_2)).decrypt(&sk);
 
-                let m_l = plaintext_l.m() * plaintext_r.m() % (*t, degree);
-                let m_r = decrypted_v1.m();
-                assert_eq!(m_l, m_r);
+                let m_l = plaintext_l.m() * plaintext_r.m();
+                let m_r = decrypted.m();
+                assert_eq!(m_l % (*t, degree), m_r);
             }
         }
     }

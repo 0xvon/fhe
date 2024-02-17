@@ -45,7 +45,7 @@ mod tests {
             let std_dev = 2.0;
             let degree = 4;
             let rlk_p = 2_i64.pow(13) * q;
-            let mut rng = rand::rngs::StdRng::seed_from_u64(23);
+            let mut rng = rand::rngs::StdRng::seed_from_u64(18);
 
             let secret_key = SecretKey::new(degree, &mut rng);
             let public_key = secret_key.generate_pk(q, std_dev, &mut rng);
